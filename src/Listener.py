@@ -61,22 +61,20 @@ def get_data(msg):
             i -= 1
 
             # Insert data for missed nodes
-            data_insertion(jsonDoc, referenceNodes[i])
+            data_insertion(jsonDoc, referenceNodes[i], "VALID")
 
             # We have filled the missed nodes
             missedNodes -= 1
-
-        # Go to next node
-        i += 1
 
     elif tryCount > 10 and jsonDoc["SensorID"] != referenceNodes[i]:
         # Remember what nodes are missed by identifying the preceeding index
         missedNodes += 1
 
         # SUGGESTION: that if tries exceeded 10 times, should signal node as "STOPPED WORKING"
+        #data_insertion(jsonDoc, referenceNodes[i], "INVALID")
 
-        # Proceed to next node
-        i += 1
+    # Proceed to next node
+    i += 1
 
     # We only have 6 nodes
     if i > 6:
@@ -95,7 +93,7 @@ client.connect(MQTT_Broker, MQTT_Port, Keep_Alive_Interval)
 client.loop_forever()
 
 
-def data_insertion(data, sensorid):
+def data_insertion(data, sensorid, state):
     try:
         # Connection to remote webserver
         connection = mysql.connector.connect(
@@ -120,7 +118,7 @@ def data_insertion(data, sensorid):
         curDate = now.strftime("%d-%m-%Y %H:%M:%S")
 
         # Sql query
-        sql_insert_query = "insert into Soil_Data values(NULL, '{}', '{}', {}, {}, {}, {}, {}, {})".format(
+        sql_insert_query = "insert into Soil_Data values(NULL, '{}', '{}', {}, {}, {}, {}, {}, {}, {})".format(
             sensorid,
             curDate,
             data['Nitrogen'],
@@ -128,7 +126,8 @@ def data_insertion(data, sensorid):
             data['Potassium'],
             data['Nitrogen_FRQ'],
             data['Phosphorous_FRQ'],
-            data['Potassium_FRQ'])
+            data['Potassium_FRQ'],
+            state)
 
         # Execute query
         dbcursor.execute(sql_insert_query)
