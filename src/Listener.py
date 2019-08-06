@@ -10,7 +10,7 @@ import threading
 from datetime import datetime
 
 # IP Address of the broker(Rpi)
-MQTT_Broker = "192.168.0.105"
+MQTT_Broker = "192.168.31.51"
 # Common port
 MQTT_Port = 1883
 # Connection lifespan
@@ -18,10 +18,14 @@ Keep_Alive_Interval = 60
 
 # Reference node list
 referenceNodes = ["Node-1", "Node-2", "Node-3", "Node-4", "Node-5", "Node-6"]
+# Array index
+i = 0
 # The node to get from payload
 payloadNode = {}
 # Tries
 tryCount = 0
+#
+missedNodes = 0
 
 
 def on_connect(client, userdata, flags, rc):
@@ -39,56 +43,44 @@ def on_message(client, userdata, msg):
 
 
 def get_data(msg):
-
     print("Recieved.")
-    try:
-        # Connection to remote webserver
-        connection = mysql.connector.connect(
-            host='192.168.0.105',
-            database='mysql',
-            user='root',
-            password='')
 
-        if connection.is_connected:
-            print("Successfully connected to MySQL")
-        else:
-            print("Connection failed")
+    # Extract payload as JSON format
+    jsonDoc = json.load(msg.payload)
 
-        # Data insertion
-        dbcursor = connection.cursor()
-        dbcursor.execute("select * from soil_data")
-        dbcursor.fetchall()
-        print("rows:{}".format(dbcursor.rowcount))
-        currentrowcount = dbcursor.rowcount + 1
-        print(currentrowcount)
+    global i, tryCount, missedNodes
+    if tryCount < 10 and jsonDoc["SensorID"] == referenceNodes[i]:
+        # Reset try counts
+        tryCount = 0
 
-        # Extract JSON content. Dictionary
-        jsonDoc = json.loads(msg.payload)
-        print(jsonDoc['SensorID'])
+        # Insert data with the current payload
+        data_insertion(jsonDoc, jsonDoc["SensorID"])
 
-        if tryCount < 10:
-            pass
+        while missedNodes > 0:
+            # Until no missing nodes left
+            i -= 1
 
-        # datetime object containing current date and time
-        now = datetime.now()
-        dt_string = now.strftime("%d-%m-%Y %H:%M:%S")
+            # Insert data for missed nodes
+            data_insertion(jsonDoc, referenceNodes[i])
 
-        # Sql query
-        sql_insert_query = "insert into soil_data values(NULL, %s, %s, %s, %s, %s, %s, %s, %s)"
+            # We have filled the missed nodes
+            missedNodes -= 1
 
-        dbcursor.executemany(sql_insert_query, payloadNode)
+        # Go to next node
+        i += 1
 
-        # Apply changes
-        connection.commit()
+    elif tryCount > 10 and jsonDoc["SensorID"] != referenceNodes[i]:
+        # Remember what nodes are missed by identifying the preceeding index
+        missedNodes += 1
 
-        # Dispose connection after use
-        connection.close()
-        dbcursor.close()
+        # SUGGESTION: that if tries exceeded 10 times, should signal node as "STOPPED WORKING"
 
-        print("Insertion successful from {}".format(jsonDoc['SensorID']))
-    except mysql.connector.Error as error:
-        connection.rollback()
-        print("Insertion failed:" + str(error))
+        # Proceed to next node
+        i += 1
+
+    # We only have 6 nodes
+    if i > 6:
+        i = 0
 
 
 # Events to listen
@@ -101,3 +93,52 @@ client.connect(MQTT_Broker, MQTT_Port, Keep_Alive_Interval)
 
 # Continous listening to the broker
 client.loop_forever()
+
+
+def data_insertion(data, sensorid):
+    try:
+        # Connection to remote webserver
+        connection = mysql.connector.connect(
+            host='127.0.0.1',
+            database='mysql',
+            user='root',
+            password='')
+
+        # Error check
+        if connection.is_connected:
+            print("Successfully connected to MySQL")
+        else:
+            print("Connection failed")
+
+        # Current row check
+        dbcursor = connection.cursor()
+        dbcursor.execute("select * from soil_data")
+        dbcursor.fetchall()
+        print("rows:{}".format(dbcursor.rowcount))
+
+        now = datetime.now()
+        curDate = now.strftime("%d-%m-%Y %H:%M:%S")
+
+        # Sql query
+        sql_insert_query = "insert into Soil_Data values(NULL, '{}', '{}', {}, {}, {}, {}, {}, {})".format(
+            sensorid,
+            curDate,
+            data['Nitrogen'],
+            data['Phosphorous'],
+            data['Potassium'],
+            data['Nitrogen_FRQ'],
+            data['Phosphorous_FRQ'],
+            data['Potassium_FRQ'])
+
+        # Execute query
+        dbcursor.execute(sql_insert_query)
+
+        # Apply changes by the executed query
+        connection.commit()
+
+        # Dispose connection after use
+        connection.close()
+        dbcursor.close()
+    except mysql.connector.Error as error:
+        connection.rollback()
+        print("Insertion failed:" + str(error))
