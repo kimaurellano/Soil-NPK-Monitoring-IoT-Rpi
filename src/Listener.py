@@ -55,7 +55,7 @@ def get_data(msg):
         dt_string = now.strftime("%d-%m-%Y %H:%M:%S")
 
         # Sql query
-        sql_insert_query = "insert into soil_data values(NULL, '{}', '{}', {}, {}, {}, {}, {}, {})".format(
+        sql_insert_query = "insert into soil_data values(NULL, '{}', '{}', {}, {}, {}, {}, {}, {}, '{}')".format(
             jsonDoc['SensorID'],
             dt_string,
             jsonDoc['Nitrogen'],
@@ -63,7 +63,8 @@ def get_data(msg):
             jsonDoc['Potassium'],
             jsonDoc['Nitrogen_FRQ'],
             jsonDoc['Phosphorous_FRQ'],
-            jsonDoc['Potassium_FRQ'])
+            jsonDoc['Potassium_FRQ'],
+            "NORMALLY-FILLED")
 
         dbcursor.execute(sql_insert_query)
 
