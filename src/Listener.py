@@ -36,6 +36,10 @@ def on_connect(client, userdata, flags, rc):
 
 
 def on_message(client, userdata, msg):
+    print("\nPayload content:")
+    print(msg.payload)
+    print("\n")
+
     jsonDoc = json.loads(msg.payload)
 
     # Pass payload from NodeMCUs
@@ -49,17 +53,16 @@ def get_data(jsonDoc):
     print("# of missed nodes:{} \n".format(missedNodes))
     tryCount += 1
 
-    if tryCount > 10 and referenceNodes[i] == "Node-6":
+    if tryCount > 10 and i == 5:
         print("WARNING: Last node is reached and still no data.\nAttempting to fill with the last captured data...\n")
 
         client.disconnect()
 
+        # Include the node 6 as missing node
         missedNodes += 1
 
+        # Set node-6 as current node
         currentNode = i
-
-        # Back to Node-1
-        i = 0
 
         while missedNodes > 0:
             print("Auto filling missed nodes:{}".format(missedNodes))
@@ -93,7 +96,7 @@ def get_data(jsonDoc):
 
                 # Sql query
                 sql_insert_query = "insert into soil_data values(NULL, '{}', '{}', {}, {}, {}, {}, {}, {}, '{}')".format(
-                    referenceNodes[i],
+                    referenceNodes[currentNode],
                     curDate,
                     lastData['Nitrogen'],
                     lastData['Phosphorous'],
@@ -116,10 +119,11 @@ def get_data(jsonDoc):
                 connection.rollback()
                 print("Insertion failed:" + str(error))
 
+            # Nodes are now filled
             missedNodes -= 1
-
             currentNode -= 1
         else:
+            # Reset tries
             tryCount = 0
 
             # Reconnect
@@ -128,7 +132,6 @@ def get_data(jsonDoc):
             print("All missed nodes are filled.\n")
 
     if tryCount < 10 and jsonDoc["SensorID"] == referenceNodes[i]:
-        #
         client.disconnect()
 
         print("NODE MATCH! Attempt of insertion...")
@@ -262,7 +265,7 @@ def get_data(jsonDoc):
             print("All missed nodes are filled. Proceeding to {}...\n".format(
                 referenceNodes[i]))
     elif tryCount > 10 and jsonDoc["SensorID"] != referenceNodes[i]:
-        print("Proceeding to next node...\n")
+        print("No data found. Skipping to next node...\n")
 
         # Proceed to next node
         i += 1
@@ -275,6 +278,7 @@ def get_data(jsonDoc):
 
     # We only have 6 nodes
     if i > 5:
+        print("Max index overflow. Resetting index to 0")
         i = 0
 
 
